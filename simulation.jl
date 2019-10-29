@@ -1,6 +1,5 @@
 # Stochastic switching population simulation
 # Plot the mean value of the switching rate
-# 
 
 using Distributions
 
@@ -11,11 +10,10 @@ struct Individual
     genotype::Float64           # switching rate 
 
     # Constructor
-    Individual() = new(0.0, Float64, Int64, Float64)
-    Individual(age) = new(age, Float64, Int64, Float64)
-    Individual(age, phenotype) = new(age, phenotype, Int64, Float64)
-    Individual(age, phenotype, genotype) = new(age, phenotype, genotype, Float64)
-    Individual(age, phenotype, genotype, fitness) = new(age, phenotype, genotype, fitness)
+    Individual() = new(Float64, Int64, Float64)
+    Individual(phenotype) = new(phenotype, Int64, Float64)
+    Individual(phenotype, genotype) = new(phenotype, genotype, Float64)
+    Individual(phenotype, genotype, fitness) = new(phenotype, genotype, fitness)
 end
 
 # Population - collection of Individuals with population-level properties.
@@ -42,7 +40,7 @@ struct Population
             else
                 p = 1
             end
-            ind = Individual(0, p, init_switch_rate)
+            ind = Individual(p, init_switch_rate, 1)
             members[i] = ind
         end
         members_prev = copy(members)
