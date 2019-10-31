@@ -2,12 +2,13 @@
 # Plot the mean value of the switching rate
 
 using Distributions
+import Base.copy, Base.copy!
 
 # Individuals of a Population.
-struct Individual
-    fitness::Float64            # survival
+mutable struct Individual
     phenotype::Int64            # 0 or 1
     genotype::Float64           # switching rate 
+    fitness::Float64            # survival
 
     # Constructor
     # Individual() = new(Int64, Float64, Float64)
@@ -17,19 +18,20 @@ struct Individual
 end
 
 # Population - collection of Individuals with population-level properties.
-struct Population
+mutable struct Population
+    size::Int64
     env_state::Int64
     env_switch_rate::Int64
     init_switch_rate::Float64
+    selec_coeff_0::Float64
     selec_coeff_1::Float64
-    selec_coeff_2::Float64
     members::Array{Individual,1}
     members_prev::Array{Individual,1}
 
     # Constructor
     function Population(size::Int64, env_state::Int64, env_switch_rate::Int64, 
-                        init_switch_rate::Float64, selec_coeff_1::Float64,
-                        selec_coeff_2::Float64)
+                        init_switch_rate::Float64, selec_coeff_0::Float64,
+                        selec_coeff_1::Float64)
         members = Array{Individual,1}(undef, size)
         # Randomly set phenotype to 0 or 1 for each 
         # individual in initial population.
@@ -44,6 +46,27 @@ struct Population
             members[i] = ind
         end
         members_prev = copy(members)
+        new(size, env_state, env_switch_rate, init_switch_rate, selec_coeff_0, 
+        selec_coeff_1, members, members_prev)
+    end
+end
+
+
+# copy inplace method for Individual
+function copy!(i::Individual, j::Individual)
+    i.genotype = j.genotype
+    i.phenotype = j.phenotype
+    i.fitness = j.fitness
+end
+
+# copy inplace method for Array of Individuals
+function copy!(x::Array{Individual,1}, y::Array{Individual,1})
+    if (length(x) != length(y))
+        error("Arrays must have equal length")
+    end
+    
+    for i=1:length(x)
+        copy!(x[i], y[i])
     end
 end
 
@@ -61,7 +84,7 @@ end
 # Main life cycle function
 function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
     # Save previous population 
-    pop.members_prev = copy(pop.members)
+    copy!(pop.members_prev, pop.members)
     
     # Update fitness of each individual
     sum_fit = 0;
@@ -75,7 +98,7 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
                 pop.members[i].fitness = 1 - pop.selec_coeff_0
             end
         end
-        sum += pop.members[i].fitness
+        sum_fit += pop.members[i].fitness
     end
     mean_fit = sum_fit / pop.size
     # Normalize fitness for each individual
@@ -85,30 +108,23 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
     
     # Survival and Reproduction
     for i=1:pop.size
-        if pop.members[i].fitness > rand()
-            # Individual survives and ages
-            pop.members[i].age += 1 # get rid of age.
-        else
-            # Individual dies and is replaced by random new born 
-            pop.members[i].age = 0
-            parent = rand(1:pop.size) # should not be uniform, should sample based on fitness 
-            # Do phenotype switching based on parent's switching
-            offspring_switch_phenotype = rand(Uniform(0, 1))
-            if offspring_switch_phenotype <= pop.members_prev[parent].genotype
-                if pop.members[i].phenotype == 0
-                    pop.members[i].phenotype = 1
-                else
-                    pop.members[i].phenotype = 0
-                end
+        parent = rand(1:pop.size) # should not be uniform, should sample based on fitness 
+        # Do phenotype switching based on parent's switching
+        offspring_switch_phenotype = rand(Uniform(0, 1))
+        if offspring_switch_phenotype <= pop.members_prev[parent].genotype
+            if pop.members[i].phenotype == 0
+                pop.members[i].phenotype = 1
+            else
+                pop.members[i].phenotype = 0
             end
-            # Mutate switching rate using mutation probability
-            # rand(Truncated(Normal(mu, sigma), 0, 1))
-            # sigma should be chosen to be relatively small, say 0.01 or 0.05
-            # mu is the parental switch rate. 
-            offspring_mutate_switch_rate = rand(Uniform(0, 1))
-            if offspring_mutate_switch_rate <= mutation_rate
-                pop.members[i].genotype = mutate(pop.members_prev[parent].genotype, 0.01)
-            end
+        end
+        # Mutate switching rate using mutation probability
+        # rand(Truncated(Normal(mu, sigma), 0, 1))
+        # sigma should be chosen to be relatively small, say 0.01 or 0.05
+        # mu is the parental switch rate. 
+        offspring_mutate_switch_rate = rand(Uniform(0, 1))
+        if offspring_mutate_switch_rate <= mutation_rate
+            pop.members[i].genotype = mutate(pop.members_prev[parent].genotype, 0.01)
         end
     end
     
@@ -140,7 +156,7 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
 end
 
 function main()
-    run_sim(1000, 500, 10, 1.0, 0.7, 0.4, 0.3)
+    run_sim(1000, 500, 10, 0.5, 0.7, 0.4, 0.3)
 end
 
 main()
