@@ -10,9 +10,9 @@ struct Individual
     genotype::Float64           # switching rate 
 
     # Constructor
-    Individual() = new(Float64, Int64, Float64)
-    Individual(phenotype) = new(phenotype, Int64, Float64)
-    Individual(phenotype, genotype) = new(phenotype, genotype, Float64)
+    # Individual() = new(Int64, Float64, Float64)
+    # Individual(phenotype) = new(phenotype, Float64, Float64)
+    # Individual(phenotype, genotype) = new(phenotype, genotype, Float64)
     Individual(phenotype, genotype, fitness) = new(phenotype, genotype, fitness)
 end
 
@@ -30,7 +30,7 @@ struct Population
     function Population(size::Int64, env_state::Int64, env_switch_rate::Int64, 
                         init_switch_rate::Float64, selec_coeff_1::Float64,
                         selec_coeff_2::Float64)
-        members = Array{Individual}(size)
+        members = Array{Individual,1}(undef, size)
         # Randomly set phenotype to 0 or 1 for each 
         # individual in initial population.
         for i=1:size
@@ -40,11 +40,22 @@ struct Population
             else
                 p = 1
             end
-            ind = Individual(p, init_switch_rate, 1)
+            ind = Individual(p, init_switch_rate, 1.0)
             members[i] = ind
         end
         members_prev = copy(members)
     end
+end
+
+function BD(μ, σ)
+    a = μ * (μ - μ^2 - σ^2) / σ^2
+    b = (1 - μ) * (μ - μ^2 - σ^2) / σ^2
+    return Beta(a,b)
+end
+
+function mutate(parent_rate, mutation_mult)
+    beta_std = mutation_mult * sqrt(parent_rate * (1-parent_rate))
+    return rand(BD(parent_rate, beta_std))
 end
 
 # Main life cycle function
@@ -70,6 +81,7 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
     # Normalize fitness for each individual
     for i=1:pop.size
         pop.members[i].fitness = pop.members[i].fitness / mean_fit
+    end
     
     # Survival and Reproduction
     for i=1:pop.size
@@ -95,7 +107,7 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
             # mu is the parental switch rate. 
             offspring_mutate_switch_rate = rand(Uniform(0, 1))
             if offspring_mutate_switch_rate <= mutation_rate
-                pop.members[i].genotype = rand(Truncated(Normal(mu, 0.01), 0, 1))
+                pop.members[i].genotype = mutate(pop.members_prev[parent].genotype, 0.01)
             end
         end
     end
@@ -111,10 +123,10 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
 end 
 
 # Main function
-function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Float64, 
+function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64, 
                  init_switch_rate::Float64, mutation_rate::Float64, 
                  selec_coeff_1::Float64, selec_coeff_2::Float64)
-    pop = Population(popSize, 0, env_switch_rate, init_switch_rate)
+    pop = Population(popSize, 0, env_switch_rate, init_switch_rate, selec_coeff_1, selec_coeff_2)
     # Switch the environmental state every num_generations
     for i=1:num_generations
         if pop.env_switch_rate % i == 0
@@ -123,5 +135,12 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Float6
             switch_env = false
         end
         next_gen(pop, mutation_rate, switch_env)
+        print(pop.members)
     end
 end
+
+function main()
+    run_sim(1000, 500, 10, 1.0, 0.7, 0.4, 0.3)
+end
+
+main()
