@@ -1,8 +1,15 @@
 # Stochastic switching population simulation
 # Plot the mean value of the switching rate
 
+using Plots
 using Distributions
 import Base.copy, Base.copy!
+
+pyplot()
+
+#using Pkg
+#Pkg.add("PyPlot")
+
 
 # Individuals of a Population.
 mutable struct Individual
@@ -51,7 +58,6 @@ mutable struct Population
     end
 end
 
-
 # copy inplace method for Individual
 function copy!(i::Individual, j::Individual)
     i.genotype = j.genotype
@@ -73,10 +79,14 @@ end
 function BD(μ, σ)
     a = μ * (μ - μ^2 - σ^2) / σ^2
     b = (1 - μ) * (μ - μ^2 - σ^2) / σ^2
+    @assert a > zero(a) && b > zero(b) "BD: $μ, $σ, $a, $b" 
     return Beta(a,b)
 end
 
 function mutate(parent_rate, mutation_mult)
+    parent_rate >= 1.0 - eps(Float64) ? parent_rate = 1.0 - 2*eps(Float64) : nothing
+    parent_rate <= eps(Float64) ? parent_rate = 2*eps(Float64) : nothing
+    @assert !isnan(parent_rate) && !isnan(mutation_mult) "mutate: $parent_rate, $mutation_mult"
     beta_std = mutation_mult * sqrt(parent_rate * (1-parent_rate))
     return rand(BD(parent_rate, beta_std))
 end
@@ -143,6 +153,9 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
                  init_switch_rate::Float64, mutation_rate::Float64, 
                  selec_coeff_1::Float64, selec_coeff_2::Float64)
     pop = Population(popSize, 0, env_switch_rate, init_switch_rate, selec_coeff_1, selec_coeff_2)
+
+    gen_mean_genotype = Array{Float64,1}(undef, num_generations)
+
     # Switch the environmental state every num_generations
     for i=1:num_generations
         if pop.env_switch_rate % i == 0
@@ -151,12 +164,22 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
             switch_env = false
         end
         next_gen(pop, mutation_rate, switch_env)
-        print(pop.members)
+        # Calculate mean switching rate for each generation
+        sum_switch = 0;
+        for j=1:pop.size
+            sum_switch += pop.members[j].genotype
+        end
+        mean_switch = sum_switch / pop.size
+        gen_mean_genotype[i] = mean_switch
     end
+
+    plot(gen_mean_genotype, linewidth=2.0, title="Mean Switching Rate per Generation", ylim=[0, 1])
+
 end
 
 function main()
-    run_sim(1000, 500, 10, 0.5, 0.7, 0.4, 0.3)
+    run_sim(10000, 500, 10, 0.5, 0.7, 0.4, 0.3)
 end
 
+## switch every 20 generations, should get 0.5 
 main()
