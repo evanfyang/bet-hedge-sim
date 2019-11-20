@@ -34,6 +34,7 @@ mutable struct Population
     selec_coeff_1::Float64
     members::Array{Individual,1}
     members_prev::Array{Individual,1}
+    fitness::Array{Float64,1}
 
     # Constructor
     function Population(size::Int64, env_state::Int64, env_switch_rate::Int64, 
@@ -54,7 +55,7 @@ mutable struct Population
         end
         members_prev = copy(members)
         new(size, env_state, env_switch_rate, init_switch_rate, selec_coeff_0, 
-        selec_coeff_1, members, members_prev)
+        selec_coeff_1, members, members_prev, ones(size))
     end
 end
 
@@ -76,19 +77,28 @@ function copy!(x::Array{Individual,1}, y::Array{Individual,1})
     end
 end
 
-function BD(μ, σ)
-    a = μ * (μ - μ^2 - σ^2) / σ^2
-    b = (1 - μ) * (μ - μ^2 - σ^2) / σ^2
-    @assert a > zero(a) && b > zero(b) "BD: $μ, $σ, $a, $b" 
-    return Beta(a,b)
-end
+# function BD(μ, σ)
+#     a = μ * (μ - μ^2 - σ^2) / σ^2
+#     b = (1 - μ) * (μ - μ^2 - σ^2) / σ^2
+#     @assert a > zero(a) && b > zero(b) "BD: $μ, $σ, $a, $b" 
+#     return Beta(a,b)
+# end
 
-function mutate(parent_rate, mutation_mult)
-    parent_rate >= 1.0 - eps(Float64) ? parent_rate = 1.0 - 2*eps(Float64) : nothing
-    parent_rate <= eps(Float64) ? parent_rate = 2*eps(Float64) : nothing
-    @assert !isnan(parent_rate) && !isnan(mutation_mult) "mutate: $parent_rate, $mutation_mult"
-    beta_std = mutation_mult * sqrt(parent_rate * (1-parent_rate))
-    return rand(BD(parent_rate, beta_std))
+# function mutate(parent_rate, mutation_mult)
+#     parent_rate >= 1.0 - eps(Float64) ? parent_rate = 1.0 - 2*eps(Float64) : nothing
+#     parent_rate <= eps(Float64) ? parent_rate = 2*eps(Float64) : nothing
+#     @assert !isnan(parent_rate) && !isnan(mutation_mult) "mutate: $parent_rate, $mutation_mult"
+#     beta_std = mutation_mult * sqrt(parent_rate * (1-parent_rate))
+#     return rand(BD(parent_rate, beta_std))
+# end
+
+function mutate(parent, sigma)
+    @assert parent > 0 && parent < 1 "parent value $parent out of bounds"
+    if rand() < 0.5
+        return parent - rand(Truncated(Exponential(sigma), 0, parent))
+    else
+        return parent + rand(Truncated(Exponential(sigma), 0, 1-parent))
+    end
 end
 
 # Main life cycle function
@@ -108,18 +118,22 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
                 pop.members[i].fitness = 1 - pop.selec_coeff_0
             end
         end
+        pop.fitness[i] = pop.members[i].fitness
         sum_fit += pop.members[i].fitness
     end
     mean_fit = sum_fit / pop.size
     # Normalize fitness for each individual
     for i=1:pop.size
         pop.members[i].fitness = pop.members[i].fitness / mean_fit
+        pop.fitness[i] = pop.fitness[i] / sum_fit
     end
-    
+
     # Survival and Reproduction
+    fit_dist = Categorical(pop.fitness)
     for i=1:pop.size
-        parent = rand(1:pop.size) # should not be uniform, should sample based on fitness 
+        parent = rand(fit_dist) # should not be uniform, should sample based on fitness 
         # Do phenotype switching based on parent's switching
+        # do not sample from mean fitness, sample from categorical distribution
         offspring_switch_phenotype = rand(Uniform(0, 1))
         if offspring_switch_phenotype <= pop.members_prev[parent].genotype
             if pop.members[i].phenotype == 0
@@ -134,6 +148,7 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
         # mu is the parental switch rate. 
         offspring_mutate_switch_rate = rand(Uniform(0, 1))
         if offspring_mutate_switch_rate <= mutation_rate
+            ## start with 0.05, run 100 times, see last value, average it. 
             pop.members[i].genotype = mutate(pop.members_prev[parent].genotype, 0.01)
         end
     end
@@ -158,7 +173,7 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
 
     # Switch the environmental state every num_generations
     for i=1:num_generations
-        if pop.env_switch_rate % i == 0
+        if i % pop.env_switch_rate == 0
             switch_env = true
         else
             switch_env = false
@@ -178,8 +193,9 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
 end
 
 function main()
-    run_sim(10000, 500, 10, 0.5, 0.7, 0.4, 0.3)
+    run_sim(1000, 1000, 5, 0.5, 0.7, 0.4, 0.4)
 end
 
-## switch every 20 generations, should get 0.5 
+## switch every 20 generations, should get 0.5
+## To run, cmd a and then cmd enter or ctl enter
 main()
