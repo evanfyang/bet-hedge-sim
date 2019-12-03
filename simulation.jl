@@ -5,7 +5,7 @@ using Plots
 using Distributions
 import Base.copy, Base.copy!
 
-pyplot()
+#pyplot()
 
 #using Pkg
 #Pkg.add("PyPlot")
@@ -14,7 +14,7 @@ pyplot()
 # Individuals of a Population.
 mutable struct Individual
     phenotype::Int64            # 0 or 1
-    genotype::Float64           # switching rate 
+    genotype::Float64           # switching rate
     fitness::Float64            # survival
 
     # Constructor
@@ -37,11 +37,11 @@ mutable struct Population
     fitness::Array{Float64,1}
 
     # Constructor
-    function Population(size::Int64, env_state::Int64, env_switch_rate::Int64, 
+    function Population(size::Int64, env_state::Int64, env_switch_rate::Int64,
                         init_switch_rate::Float64, selec_coeff_0::Float64,
                         selec_coeff_1::Float64)
         members = Array{Individual,1}(undef, size)
-        # Randomly set phenotype to 0 or 1 for each 
+        # Randomly set phenotype to 0 or 1 for each
         # individual in initial population.
         for i=1:size
             p = rand(Uniform(0, 1))
@@ -54,7 +54,7 @@ mutable struct Population
             members[i] = ind
         end
         members_prev = copy(members)
-        new(size, env_state, env_switch_rate, init_switch_rate, selec_coeff_0, 
+        new(size, env_state, env_switch_rate, init_switch_rate, selec_coeff_0,
         selec_coeff_1, members, members_prev, ones(size))
     end
 end
@@ -71,7 +71,7 @@ function copy!(x::Array{Individual,1}, y::Array{Individual,1})
     if (length(x) != length(y))
         error("Arrays must have equal length")
     end
-    
+
     for i=1:length(x)
         copy!(x[i], y[i])
     end
@@ -80,7 +80,7 @@ end
 # function BD(μ, σ)
 #     a = μ * (μ - μ^2 - σ^2) / σ^2
 #     b = (1 - μ) * (μ - μ^2 - σ^2) / σ^2
-#     @assert a > zero(a) && b > zero(b) "BD: $μ, $σ, $a, $b" 
+#     @assert a > zero(a) && b > zero(b) "BD: $μ, $σ, $a, $b"
 #     return Beta(a,b)
 # end
 
@@ -103,9 +103,9 @@ end
 
 # Main life cycle function
 function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
-    # Save previous population 
+    # Save previous population
     copy!(pop.members_prev, pop.members)
-    
+
     # Update fitness of each individual
     sum_fit = 0;
     for i=1:pop.size
@@ -131,7 +131,8 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
     # Survival and Reproduction
     fit_dist = Categorical(pop.fitness)
     for i=1:pop.size
-        parent = rand(fit_dist) # should not be uniform, should sample based on fitness 
+        parent = rand(fit_dist) # should not be uniform, should sample based on fitness
+        copy!(pop.members[i], pop.members_prev[parent])
         # Do phenotype switching based on parent's switching
         # do not sample from mean fitness, sample from categorical distribution
         offspring_switch_phenotype = rand(Uniform(0, 1))
@@ -145,14 +146,14 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
         # Mutate switching rate using mutation probability
         # rand(Truncated(Normal(mu, sigma), 0, 1))
         # sigma should be chosen to be relatively small, say 0.01 or 0.05
-        # mu is the parental switch rate. 
+        # mu is the parental switch rate.
         offspring_mutate_switch_rate = rand(Uniform(0, 1))
         if offspring_mutate_switch_rate <= mutation_rate
-            ## start with 0.05, run 100 times, see last value, average it. 
+            ## start with 0.05, run 100 times, see last value, average it.
             pop.members[i].genotype = mutate(pop.members_prev[parent].genotype, 0.01)
         end
     end
-    
+
     # Update environmental state
     if switch_env
         if pop.env_state == 0
@@ -161,15 +162,19 @@ function next_gen(pop::Population, mutation_rate::Float64, switch_env::Bool)
             pop.env_state = 0
         end
     end
-end 
+end
 
 # Main function
-function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64, 
-                 init_switch_rate::Float64, mutation_rate::Float64, 
+function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
+                 init_switch_rate::Float64, mutation_rate::Float64,
                  selec_coeff_1::Float64, selec_coeff_2::Float64)
     pop = Population(popSize, 0, env_switch_rate, init_switch_rate, selec_coeff_1, selec_coeff_2)
 
     gen_mean_genotype = Array{Float64,1}(undef, num_generations)
+    env_states = zeros(num_generations)
+    fitness = zeros(num_generations, popSize)
+    genotypes = zeros(num_generations, popSize)
+    phenotypes = zeros(num_generations, popSize)
 
     # Switch the environmental state every num_generations
     for i=1:num_generations
@@ -178,6 +183,7 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
         else
             switch_env = false
         end
+        env_states[i] = pop.env_state
         next_gen(pop, mutation_rate, switch_env)
         # Calculate mean switching rate for each generation
         sum_switch = 0;
@@ -186,10 +192,12 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
         end
         mean_switch = sum_switch / pop.size
         gen_mean_genotype[i] = mean_switch
+        fitness[i,:] = pop.fitness
+        genotypes[i,:] = [pop.members[i].genotype for i in 1:pop.size]
+        phenotypes[i,:] = [pop.members[i].phenotype for i in 1:pop.size]
     end
 
-    plot(gen_mean_genotype, linewidth=2.0, title="Mean Switching Rate per Generation", ylim=[0, 1])
-
+    return gen_mean_genotype, fitness, env_states, genotypes, phenotypes
 end
 
 function main()
