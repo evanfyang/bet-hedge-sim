@@ -1,6 +1,11 @@
 # Stochastic switching population simulation
 # Plot the mean value of the switching rate
 
+# Selection is not working, find out what is going on
+# -> Investigate fitness values, figure out why it is not changing 
+# When environment is switching, members with phenotype matching the environment should be more common
+# -> Investigate how fitness values are being calculated 
+
 using Plots
 using Distributions
 import Base.copy, Base.copy!
@@ -197,11 +202,14 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
         phenotypes[i,:] = [pop.members[i].phenotype for i in 1:pop.size]
     end
 
+    heatmap(pop.fitness, pop.fitness)
+
     return gen_mean_genotype, fitness, env_states, genotypes, phenotypes
 end
 
-function main()
-    run_sim(1000, 1000, 5, 0.5, 0.7, 0.4, 0.4)
+function main(args)
+    #run_sim(100, 1000, 5, 0.5, 0.7, 0.4, 0.4)
+    #TODO: find a way to pass arguments to run_sim from command line.
 end
 
 ## switch every 20 generations, should get 0.5
