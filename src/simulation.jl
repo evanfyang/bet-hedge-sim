@@ -8,6 +8,7 @@
 
 using Plots
 using Distributions
+using ArgParse
 import Base.copy, Base.copy!
 
 #pyplot()
@@ -208,10 +209,46 @@ function run_sim(num_generations::Int64, popSize::Int64, env_switch_rate::Int64,
 end
 
 function main(args)
-    #run_sim(100, 1000, 5, 0.5, 0.7, 0.4, 0.4)
-    #TODO: find a way to pass arguments to run_sim from command line.
+    @show args
+    s = ArgParseSettings(description = "Run bet hedge simulation with several parameters")
+    @add_arg_table s begin
+        "--job_name"
+            ArgType=AbstractString
+            default="test"
+        "--num_gen"
+            ArgType=Int64
+            default=100
+        "--pop_size"
+            ArgType=Int64
+            default=100
+        "--env_switch_rate"
+            ArgType=Int64
+            default=5
+        "--init_switch_rate"
+            ArgType=Float64
+            default=0.5
+        "--mutation_rate"
+            ArgType=Float64
+            default=0.5
+        "--s1"
+            ArgType=Float64
+            default=0.4
+        "--s2"
+            ArgType=Float64
+            default=0.4
+    
+    parsed_args = parsed_args(args, s)
+    
+    job_name, num_gen, pop_size, env_switch_rate, init_switch_rate, 
+        mutation_rate, s1, s2 = 
+        parsed_args["job_name"], parsed_args["num_gen"], parsed_args["pop_size"], 
+        parsed_args["env_switch_rate"], parsed_args["init_switch_rate"], 
+        parsed_args["mutation_rate"], parsed_args["s1"], parsed_args["s2"]
+    
+    run_sim(num_gen, pop_size, env_switch_rate, init_switch_rate, mutation_rate, 
+        s1, s2)
 end
 
 ## switch every 20 generations, should get 0.5
 ## To run, cmd a and then cmd enter or ctl enter
-main()
+main(ARGS)
